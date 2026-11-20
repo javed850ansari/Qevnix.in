@@ -1,0 +1,7 @@
+.env
+node_modules/
+reviews.json
+projects.json
+data/
+payments.json
+payments.json.tmp
