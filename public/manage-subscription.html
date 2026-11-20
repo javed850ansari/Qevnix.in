@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Subscription | QEVNIX</title>
+<meta name="description" content="View your QEVNIX website maintenance subscription, payment schedule, payment history and cancellation request options.">
+<meta name="theme-color" content="#152033">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+.sub-wrap{max-width:900px;margin:0 auto}.sub-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:28px 0}.sub-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:0 8px 24px rgba(21,32,51,.04)}.sub-card h2{font-size:20px;margin-bottom:12px}.sub-card p,.sub-card li{color:var(--muted);font-size:15px}.sub-card strong{color:var(--ink)}.status{display:inline-block;padding:5px 10px;border-radius:99px;background:#edf0e9;color:#3f5f14;font-weight:700;font-size:13px}.empty{padding:18px;background:#f7f8f6;border:1px dashed #cbd3c5;border-radius:10px;color:var(--muted);font-size:14px}.sub-form{display:grid;gap:12px}.sub-form label{font-weight:700;font-size:14px}.sub-form input,.sub-form select,.sub-form textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff}.sub-form textarea{min-height:100px;resize:vertical}.notice{font-size:13px!important;color:var(--soft)!important}.history{width:100%;border-collapse:collapse;font-size:14px}.history th,.history td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line)}.history th{color:var(--muted)}@media(max-width:680px){.sub-grid{grid-template-columns:1fr}.history{font-size:12px}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="announcement">QEVNIX customer area <a href="https://wa.me/919661985400" target="_blank" rel="noopener">Need help? WhatsApp us</a></div>
+<header class="site-header"><div class="wrap header-in">
+<a class="brand" href="index.html" aria-label="QEVNIX home"><span class="brand-mark" aria-hidden="true">Q</span><span>QEV<span class="brand-light">NIX.</span></span></a>
+<button class="menu-toggle" type="button" aria-expanded="false" aria-controls="nav">Menu</button>
+<nav class="nav" id="nav" aria-label="Main"><a href="index.html">Home</a><a href="index.html#pricing">Plans</a><a href="faq.html">FAQ</a><a href="contact.html">Contact</a><a href="manage-subscription.html" aria-current="page">My Subscription</a></nav>
+</div></header>
+<section class="page-head"><div class="wrap"><h1>My Subscription</h1><p class="lead">Manage your QEVNIX website maintenance plan in one place.</p></div></section>
+<main id="main" class="page-body"><div class="wrap sub-wrap">
+<div class="sub-card">
+<h2>Find your subscription</h2>
+<p>Enter the email address used when you subscribed and your QEVNIX subscription/reference ID.</p>
+<form class="sub-form" id="lookupForm">
+<div><label for="customerEmail">Registered email</label><input id="customerEmail" name="email" type="email" placeholder="you@example.com" required></div>
+<div><label for="subscriptionRef">Subscription / Reference ID</label><input id="subscriptionRef" name="reference" type="text" placeholder="Enter your subscription ID" required></div>
+<button class="btn btn-dark" type="submit">Continue</button>
+<p class="notice" id="lookupMessage" role="status">Secure account lookup will be enabled after the QEVNIX customer database and payment backend are connected. This static page does not verify customer identity or retrieve live billing data.</p>
+</form>
+</div>
+<div class="sub-grid">
+<section class="sub-card"><h2>Active Plan</h2><p><span class="status">Account connection pending</span></p><div class="empty">Your plan name, monthly amount and current subscription status will appear here after secure account verification.</div></section>
+<section class="sub-card"><h2>Next Payment Date</h2><div class="empty">Your next billing date and amount will be fetched from the payment provider after integration. No date is shown until verified.</div></section>
+<section class="sub-card"><h2>AutoPay Mandate</h2><div class="empty">Mandate status (Active, Paused, Cancelled or Failed) will be displayed here after Razorpay/UPI mandate integration.</div></section>
+<section class="sub-card"><h2>Payment History</h2><div class="empty">Your successful, pending and failed payments will be listed here after the secure billing backend is connected.</div></section>
+</div>
+<section class="sub-card">
+<h2>Request subscription cancellation</h2>
+<p>Send a cancellation request to QEVNIX. Your request will be reviewed and the scheduled end date will be confirmed with you.</p>
+<form class="sub-form" id="cancelForm">
+<div><label for="cancelName">Full name</label><input id="cancelName" name="name" required placeholder="Your full name"></div>
+<div><label for="cancelEmail">Registered email</label><input id="cancelEmail" name="email" type="email" required placeholder="you@example.com"></div>
+<div><label for="cancelRef">Subscription / Reference ID</label><input id="cancelRef" name="reference" required placeholder="Your subscription ID"></div>
+<div><label for="cancelReason">Reason (optional)</label><textarea id="cancelReason" name="reason" placeholder="Tell us why you want to cancel"></textarea></div>
+<p class="notice">QEVNIX's stated cancellation notice period is 30 days. The effective cancellation date will be confirmed by QEVNIX. You can also revoke a UPI AutoPay mandate directly through your UPI app or bank; this request form cannot prevent that action. Any billing already due will be handled according to the agreed terms and applicable law.</p>
+<button class="btn btn-primary" type="submit">Send cancellation request on WhatsApp</button>
+<p class="notice" id="cancelMessage" role="status"></p>
+</form>
+</section>
+<p class="notice" style="margin-top:18px">Privacy note: Do not share card numbers, UPI PIN, passwords or OTPs in this form or over WhatsApp.</p>
+</div></main>
+<footer class="site-footer"><div class="wrap"><p>© <span id="year"></span> QEVNIX. All rights reserved. · <a href="privacy-policy.html">Privacy</a> · <a href="terms.html">Terms</a> · <a href="contact.html">Contact</a></p></div></footer>
+<script src="script.js"></script>
+<script>
+const lookupForm=document.getElementById('lookupForm');
+lookupForm.addEventListener('submit',e=>{e.preventDefault();document.getElementById('lookupMessage').textContent='Account lookup is not live yet. Please contact QEVNIX on WhatsApp with your registered email and reference ID. Do not send any OTP, password or payment PIN.';});
+document.getElementById('cancelForm').addEventListener('submit',e=>{
+ e.preventDefault();
+ const d=new FormData(e.currentTarget);
+ const msg=['Hello QEVNIX, I want to request cancellation of my maintenance subscription.','Name: '+d.get('name'),'Registered email: '+d.get('email'),'Subscription/Reference ID: '+d.get('reference'),'Reason: '+(d.get('reason')||'Not specified'),'Please confirm receipt and the effective cancellation date.'];
+ window.open('https://wa.me/919661985400?text='+encodeURIComponent(msg.join('\n')),'_blank','noopener');
+ document.getElementById('cancelMessage').textContent='WhatsApp is opening with your cancellation request. Please press Send in WhatsApp to submit it.';
+});
+</script>
+</body></html>
