@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><script src="config.js"></script><meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Subscription | QEVNIX</title>
+<meta name="description" content="View your QEVNIX website maintenance subscription, payment schedule, payment history and cancellation request options.">
+<meta name="theme-color" content="#152033">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+.sub-wrap{max-width:900px;margin:0 auto}.sub-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:28px 0}.sub-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:0 8px 24px rgba(21,32,51,.04)}.sub-card h2{font-size:20px;margin-bottom:12px}.sub-card p,.sub-card li{color:var(--muted);font-size:15px}.sub-card strong{color:var(--ink)}.status{display:inline-block;padding:5px 10px;border-radius:99px;background:#edf0e9;color:#3f5f14;font-weight:700;font-size:13px}.empty{padding:18px;background:#f7f8f6;border:1px dashed #cbd3c5;border-radius:10px;color:var(--muted);font-size:14px}.sub-form{display:grid;gap:12px}.sub-form label{font-weight:700;font-size:14px}.sub-form input,.sub-form select,.sub-form textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff}.sub-form textarea{min-height:100px;resize:vertical}.notice{font-size:13px!important;color:var(--soft)!important}.history{width:100%;border-collapse:collapse;font-size:14px}.history th,.history td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line)}.history th{color:var(--muted)}@media(max-width:680px){.sub-grid{grid-template-columns:1fr}.history{font-size:12px}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="announcement">QEVNIX customer area <a href="https://wa.me/917282851582" target="_blank" rel="noopener">Need help? WhatsApp us</a></div>
+<header class="site-header"><div class="wrap header-in">
+<a class="brand" href="index.html" aria-label="QEVNIX home"><span class="brand-mark" aria-hidden="true">Q</span><span>QEV<span class="brand-light">NIX.</span></span></a>
+<button class="menu-toggle" type="button" aria-expanded="false" aria-controls="nav">Menu</button>
+<nav class="nav" id="nav" aria-label="Main"><a href="index.html">Home</a><a href="index.html#pricing">Plans</a><a href="faq.html">FAQ</a><a href="contact.html">Contact</a><a href="manage-subscription.html" aria-current="page">My Subscription</a></nav>
+</div></header>
+<section class="page-head"><div class="wrap"><h1>My Subscription</h1><p class="lead">Manage your QEVNIX website maintenance plan in one place.</p></div></section>
+<main id="main" class="page-body"><div class="wrap sub-wrap">
+<section class="sub-card" id="billingLoginCard">
+<h2>Customer Login</h2>
+<p>Sign in with the same email and password used for your QEVNIX Customer Portal. Your billing details are visible only after sign-in.</p>
+<form class="sub-form" id="billingLoginForm">
+<div><label for="billingEmail">Registered email</label><input id="billingEmail" name="email" type="email" autocomplete="username" required placeholder="you@example.com"></div>
+<div><label for="billingPassword">Portal password</label><input id="billingPassword" name="password" type="password" autocomplete="current-password" required></div>
+<button class="btn btn-dark" type="submit">Login and view billing</button>
+<p class="notice" id="billingLoginMessage" role="status"></p>
+</form>
+</section>
+<section id="billingDashboard" hidden>
+<div class="sub-card" style="margin-top:20px"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><h2>My Billing</h2><p id="billingWelcome"></p></div><button class="btn btn-outline" type="button" id="billingRefresh">Refresh</button><button class="btn btn-outline" type="button" id="billingLogout">Logout</button></div><p class="notice" id="billingMessage" role="status"></p></div>
+<section class="sub-card" style="margin-top:20px">
+<h2>My Payments</h2>
+<p>All successful one-time website payments and monthly subscription invoices appear here.</p>
+<div id="paymentHistory"><div class="empty">Sign in to load your payment history.</div></div>
+</section>
+<div id="subscriptionList"></div>
+<section class="sub-card" style="margin-top:20px">
+<h2>Request subscription cancellation</h2>
+<p>Select one of your verified subscriptions. Your request is saved for admin review; it does not cancel the subscription automatically.</p>
+<form class="sub-form" id="cancelForm">
+<div><label for="cancelSubscription">Subscription</label><select id="cancelSubscription" name="subscriptionId" required><option value="">Select a subscription</option></select></div>
+<div><label for="cancelReason">Reason (optional)</label><textarea id="cancelReason" name="reason" placeholder="Tell us why you want to cancel"></textarea></div>
+<p class="notice">QEVNIX's stated cancellation notice period is 30 days. The effective cancellation date will be confirmed by QEVNIX. You can also revoke a UPI AutoPay mandate directly through your UPI app or bank.</p>
+<button class="btn btn-primary" type="submit">Submit cancellation request</button><p class="notice" id="cancelMessage" role="status"></p>
+</form></section>
+</section>
+<p class="notice" style="margin-top:18px">Privacy note: Do not share card numbers, UPI PIN, passwords or OTPs with anyone. QEVNIX will never ask for your UPI PIN or OTP.</p>
+</div></main>
+<footer class="site-footer"><div class="wrap"><p>© <span id="year"></span> QEVNIX. All rights reserved. · <a href="privacy-policy.html">Privacy</a> · <a href="terms.html">Terms</a> · <a href="contact.html">Contact</a></p></div></footer>
+<script src="script.js"></script>
+<script>
+(function(){
+ const $=id=>document.getElementById(id);
+ const loginCard=$('billingLoginCard'), dashboard=$('billingDashboard'), list=$('subscriptionList'), paymentHistory=$('paymentHistory');
+ let token=sessionStorage.getItem('qevnix_customer_token');
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const money=v=>'₹'+Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:2});
+ const date=v=>v?new Date(Number(v)*1000).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}):'Not scheduled';
+ async function api(url,opts={}){const headers=Object.assign({'Content-Type':'application/json'},opts.headers||{});if(token)headers.Authorization='Bearer '+token;const r=await fetch(url,Object.assign({},opts,{headers}));const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Request failed');return d;}
+ function showLogin(message){dashboard.hidden=true;loginCard.hidden=false;if(message)$('billingLoginMessage').textContent=message;}
+ function renderPayments(data){const rows=data.payments||[];if(!rows.length){paymentHistory.innerHTML='<div class="empty">No payment records found for this account yet.</div>';return;}paymentHistory.innerHTML='<div style="overflow-x:auto"><table class="history"><thead><tr><th>Service</th><th>Type</th><th>Date</th><th>Amount</th><th>Status</th><th>Reference</th></tr></thead><tbody>'+rows.map(p=>'<tr><td>'+esc(p.description)+'</td><td>'+esc(p.type==='one_time'?'One-time':'Subscription')+'</td><td>'+esc(date(p.paidAt))+'</td><td>'+esc(money(p.amount))+'</td><td>'+esc(p.status)+'</td><td>'+esc(p.id||'—')+'</td></tr>').join('')+'</tbody></table></div>'; }
+ function render(data){$('billingWelcome').textContent='Signed in as '+data.customer.name+' ('+data.customer.email+')';
+   if(!data.subscriptions.length){list.innerHTML='<div class="sub-card"><h2>No subscription found</h2><div class="empty">No QEVNIX monthly subscription is linked to this account yet. One-time website payments do not appear as subscriptions.</div></div>';}
+   else list.innerHTML=data.subscriptions.map(sub=>{
+     const invoices=sub.invoices||[];
+     const history=invoices.length?'<div style="overflow-x:auto"><table class="history"><thead><tr><th>Invoice</th><th>Date</th><th>Amount</th><th>Status</th><th>Payment ID</th></tr></thead><tbody>'+invoices.map(i=>'<tr><td>'+esc(i.invoiceNumber)+'</td><td>'+esc(date(i.issuedAt))+'</td><td>'+esc(money(i.amount))+'</td><td>'+esc(i.status)+'</td><td>'+esc(i.paymentId||'—')+'</td></tr>').join('')+'</tbody></table></div>':'<div class="empty">No invoices have been generated for this subscription yet.</div>';
+     return '<article class="sub-card" style="margin-top:18px"><h2>'+esc(sub.planName)+'</h2><p><span class="status">'+esc(sub.status)+'</span></p><div class="sub-grid"><div><strong>Monthly amount</strong><p>'+esc(money(sub.amount))+'</p></div><div><strong>Next payment / charge</strong><p>'+esc(date(sub.nextChargeAt))+'</p></div><div><strong>AutoPay / subscription status</strong><p>'+esc(sub.status)+'</p></div><div><strong>Billing cycles paid</strong><p>'+esc(sub.paidCount)+' / '+esc(sub.totalCount)+'</p></div></div><p class="notice">Subscription ID: '+esc(sub.subscriptionId)+'</p><h3>Payment history</h3>'+history+'</article>';
+   }).join('');
+   const select=$('cancelSubscription');select.innerHTML='<option value="">Select a subscription</option>'+data.subscriptions.map(x=>'<option value="'+esc(x.subscriptionId)+'">'+esc(x.planName)+' — '+esc(x.status)+'</option>').join('');
+   loginCard.hidden=true;dashboard.hidden=false;
+ }
+ async function loadBilling(){if(!token)return showLogin();$('billingMessage').textContent='Fetching live details from Razorpay…';try{const d=await api('/api/customer/billing');render(d);const p=await api('/api/customer/payments');renderPayments(p);$('billingMessage').textContent='Billing and payment history fetched at '+new Date(p.fetchedAt).toLocaleString('en-IN')+'.';}catch(e){if(/sign in|login/i.test(e.message)){sessionStorage.removeItem('qevnix_customer_token');token=null;showLogin(e.message);}else $('billingMessage').textContent=e.message;}}
+ $('billingLoginForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.currentTarget);$('billingLoginMessage').textContent='Signing in…';try{const d=await api('/api/customer/login',{method:'POST',body:JSON.stringify({email:f.get('email'),password:f.get('password')})});token=d.token;sessionStorage.setItem('qevnix_customer_token',token);await loadBilling();}catch(err){$('billingLoginMessage').textContent=err.message;}});
+ $('billingRefresh').addEventListener('click',loadBilling);
+ $('billingLogout').addEventListener('click',async()=>{try{await api('/api/customer/logout',{method:'POST'});}catch(e){}sessionStorage.removeItem('qevnix_customer_token');token=null;showLogin('You have logged out.');});
+ $('cancelForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.currentTarget);$('cancelMessage').textContent='Submitting request…';try{const d=await api('/api/subscriptions/cancellation-request',{method:'POST',body:JSON.stringify({subscriptionId:f.get('subscriptionId'),reason:f.get('reason')})});$('cancelMessage').textContent=d.message+' Request ID: '+d.requestId;e.currentTarget.reset();}catch(err){$('cancelMessage').textContent=err.message;}});
+ if(token)loadBilling();
+})();
+</script>
+</body></html>
