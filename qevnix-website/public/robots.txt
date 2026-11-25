@@ -1,9 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /admin-reviews.html
-Disallow: /admin-projects.html
-Disallow: /customer-portal.html
-Disallow: /manage-subscription.html
-Disallow: /payment-return.html
-Disallow: /subscription-return.html
-Sitemap: https://qevnix.in/sitemap.xml
