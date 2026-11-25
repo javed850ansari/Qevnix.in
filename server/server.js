@@ -17,8 +17,24 @@ const paymentMode = rzp.modeOf(process.env.RAZORPAY_KEY_ID);
 
 app.set("trust proxy", 1); // needed on hosts like Render so req.ip is the real visitor IP
 // FRONTEND_ORIGIN can list several websites separated by commas, e.g. https://qevnix.in,https://www.qevnix.in
-const allowedOrigins = (process.env.FRONTEND_ORIGIN || "http://localhost:4242").split(",").map(x => x.trim().replace(/\/$/, "")).filter(Boolean);
-app.use(cors({ origin: allowedOrigins }));
+const defaultAllowedOrigins = [
+  "https://qevnix.in",
+  "https://www.qevnix.in",
+  "https://qevnix.netlify.app",
+  "http://localhost:4242"
+];
+const configuredOrigins = (process.env.FRONTEND_ORIGIN || "").split(",").map(x => x.trim().replace(/\/$/, "")).filter(Boolean);
+const allowedOrigins = new Set([...defaultAllowedOrigins, ...configuredOrigins]);
+app.use(cors({
+  origin(origin, callback) {
+    // Allow server-to-server / health checks with no Origin header.
+    if (!origin || allowedOrigins.has(origin.replace(/\/$/, ""))) return callback(null, true);
+    return callback(new Error("Origin not allowed by QEVNIX CORS policy"));
+  },
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-admin-token"],
+  optionsSuccessStatus: 204
+}));
 app.use(express.json({ limit: "50kb", verify: (req, res, buf) => { req.rawBody = buf; } }));
 // Serve ONLY the public/ folder. Never serve the server/ folder: it holds reviews.json,
 // projects.json (customer records) and .env.
