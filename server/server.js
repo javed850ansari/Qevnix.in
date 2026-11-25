@@ -7,6 +7,10 @@ const fs = require("fs");
 
 const app = express();
 const PORT = Number(process.env.PORT || 4242);
+// Set DATA_DIR to a mounted persistent volume (for example /var/data) when available.
+// Without it, files remain in the service folder (temporary on many cloud hosts).
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+fs.mkdirSync(DATA_DIR, { recursive: true });
 const rzp = require("./razorpay");
 const razorpay = rzp.createClient({ keyId: process.env.RAZORPAY_KEY_ID, keySecret: process.env.RAZORPAY_KEY_SECRET });
 const paymentMode = rzp.modeOf(process.env.RAZORPAY_KEY_ID);
@@ -23,7 +27,7 @@ app.use(NOINDEX_PATHS, (req, res, next) => { res.set("X-Robots-Tag", "noindex, n
 app.use(express.static(path.join(__dirname, "..", "public"), { dotfiles: "deny" }));
 
 // Simple review moderation starter. For production, use a persistent database/storage volume.
-const REVIEWS_FILE = process.env.REVIEWS_FILE || path.join(__dirname, "reviews.json");
+const REVIEWS_FILE = process.env.REVIEWS_FILE || path.join(DATA_DIR, "reviews.json");
 function readReviews() {
   try { return JSON.parse(fs.readFileSync(REVIEWS_FILE, "utf8")); }
   catch (e) { if (e.code === "ENOENT") return []; throw e; }
@@ -47,7 +51,10 @@ const products = {
   maintenance_premium: { type: "subscription", amount: 3999, label: "QEVNIX Premium Maintenance" },
   google_profile_setup: { type: "one_time", amount: 999, label: "QEVNIX Google Business Profile Setup (starting price)" },
   google_profile_management: { type: "subscription", amount: 999, label: "QEVNIX Google Profile Management (monthly starting price)" },
-  business_growth_package: { type: "one_time", amount: 5999, label: "QEVNIX Business Growth Package (starting price)" }
+  business_growth_package: { type: "one_time", amount: 5999, label: "QEVNIX Business Growth Package (starting price)" },
+  hospital_basic: { type: "one_time", amount: 14999, label: "QEVNIX Basic Hospital Website" },
+  hospital_professional: { type: "one_time", amount: 24999, label: "QEVNIX Professional Hospital Website" },
+  hospital_premium: { type: "one_time", amount: 39999, label: "QEVNIX Premium Hospital Website" }
 };
 
 // Simple per-IP limiter for public payment endpoints (each call creates a Razorpay API request).
@@ -65,7 +72,7 @@ function rateLimit(name, limit, windowMs) {
 setInterval(() => { const now = Date.now(); for (const [k, v] of rateHits) if (now - v.first > 60 * 60 * 1000) rateHits.delete(k); }, 10 * 60 * 1000).unref();
 
 // Record of payments/subscriptions (updated by verify + webhook). Kept outside public/.
-const PAYMENTS_FILE = process.env.PAYMENTS_FILE || path.join(__dirname, "payments.json");
+const PAYMENTS_FILE = process.env.PAYMENTS_FILE || path.join(DATA_DIR, "payments.json");
 function readPayments() {
   try { return JSON.parse(fs.readFileSync(PAYMENTS_FILE, "utf8")); }
   catch (e) { if (e.code === "ENOENT") return {}; throw e; }
@@ -81,7 +88,7 @@ function upsertPayment(key, fields) {
   } catch (e) { console.error("Could not record payment:", e.message); }
 }
 // Razorpay retries webhook deliveries. Persist event IDs so a repeated delivery is safe.
-const WEBHOOK_EVENTS_FILE = process.env.WEBHOOK_EVENTS_FILE || path.join(__dirname, "webhook-events.json");
+const WEBHOOK_EVENTS_FILE = process.env.WEBHOOK_EVENTS_FILE || path.join(DATA_DIR, "webhook-events.json");
 function readWebhookEvents() {
   try { const v = JSON.parse(fs.readFileSync(WEBHOOK_EVENTS_FILE, "utf8")); return Array.isArray(v) ? v : []; }
   catch (e) { return []; } // missing or unreadable file: treat as "no events seen yet"
@@ -166,15 +173,20 @@ app.get("/api/health", (req, res) => {
 });
 
 // Public price list so the checkout form can show amounts (the server still decides the real amount).
+const GST_RATE = 18;
+const money2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 app.get("/api/products", (req, res) => {
-  res.json({ products: Object.entries(products).map(([code, p]) => ({ code, type: p.type, amount: p.amount, label: p.label })) });
+  res.json({ products: Object.entries(products).map(([code, p]) => {
+    const gstAmount = p.type === "one_time" ? money2(p.amount * GST_RATE / 100) : 0;
+    return { code, type: p.type, amount: p.amount, label: p.label, gstRate: p.type === "one_time" ? GST_RATE : 0, gstAmount, totalWithGst: money2(p.amount + gstAmount) };
+  }) });
 });
 
 
 
 // Customer project tracking starter. Admin creates customer accounts and assigns projects.
 // For production, use a managed database, HTTPS, rate limiting and a dedicated session store.
-const PROJECTS_FILE = process.env.PROJECTS_FILE || path.join(__dirname, "projects.json");
+const PROJECTS_FILE = process.env.PROJECTS_FILE || path.join(DATA_DIR, "projects.json");
 const projectSessions = new Map(); // token -> { email, expires }
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;      // customers must sign in again after 8 hours
 const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
@@ -223,6 +235,45 @@ function customerFromRequest(req) {
   const data = readProjectData();
   return data.customers.find(c => c.email === email) || null;
 }
+// ---- Automatic customer portal account after a successful payment ----
+// The payer's browser gets a one-time, 24-hour "set your password" token. It is sent in the URL #fragment (never logged by servers).
+const SETUP_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const sha256 = text => crypto.createHash("sha256").update(text).digest("hex");
+function provisionPortalFromPayment(key, { issueSetupToken = false } = {}) {
+  try {
+    const rec = readPayments()[key];
+    if (!rec || !rec.customerEmail) return null;
+    const email = String(rec.customerEmail).trim().toLowerCase();
+    const data = readProjectData();
+    let customer = data.customers.find(c => c.email === email);
+    if (!customer) {
+      customer = { name: rec.customerName || "QEVNIX Customer", email, salt: null, passwordHash: null, createdByOrder: key, createdAt: new Date().toISOString() };
+      data.customers.push(customer);
+    }
+    if (!data.projects.some(p => p.paymentRef === key)) {
+      const isSub = rec.type === "subscription";
+      const total = isSub ? rec.amount : rec.totalAmount;
+      const paid = rec.amount;
+      data.projects.push({
+        id: crypto.randomUUID(), customerEmail: email, paymentRef: key,
+        title: String(rec.item || "QEVNIX service").replace(/ \((starting|monthly starting) price\)/, "").slice(0, 120),
+        description: isSub ? `Monthly plan, ${paid} INR per month including GST.` : `Paid online: ${paid} INR of ${total} INR (including GST).`,
+        status: isSub ? "In Progress" : "Pending",
+        paymentStatus: isSub || rec.paymentOption !== "advance" ? "Fully Paid" : "Advance Paid",
+        totalAmount: total, paidAmount: paid, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+      });
+    }
+    let setupToken = null;
+    if (issueSetupToken && !customer.passwordHash && customer.createdByOrder === key) {
+      setupToken = crypto.randomBytes(24).toString("hex");
+      customer.setup = { tokenHash: sha256(setupToken), expires: Date.now() + SETUP_TOKEN_TTL_MS };
+    }
+    writeProjectData(data);
+    return { email, hasPassword: Boolean(customer.passwordHash), setupToken };
+  } catch (e) { console.error("Portal provisioning failed:", e.message); return null; }
+}
+const portalInfo = p => p && { email: p.email, hasPassword: p.hasPassword, setupToken: p.setupToken || undefined };
+
 app.post("/api/customer/login", (req, res) => {
   try {
     const email = String(req.body.email || "").trim().toLowerCase();
@@ -233,7 +284,7 @@ app.post("/api/customer/login", (req, res) => {
     }
     const data = readProjectData();
     const customer = data.customers.find(c => c.email === email);
-    if (!customer || password.length < 1) { recordFailure(keys); return res.status(401).json({ error: "Email or password is incorrect." }); }
+    if (!customer || !customer.passwordHash || password.length < 1) { recordFailure(keys); return res.status(401).json({ error: "Email or password is incorrect." }); }
     const actual = Buffer.from(hashPassword(password, customer.salt), "hex");
     const expected = Buffer.from(customer.passwordHash, "hex");
     if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) { recordFailure(keys); return res.status(401).json({ error: "Email or password is incorrect." }); }
@@ -243,6 +294,113 @@ app.post("/api/customer/login", (req, res) => {
     res.json({ token, customer: { name: customer.name, email: customer.email } });
   } catch (e) { res.status(500).json({ error: "Could not sign in." }); }
 });
+// Authenticated customer billing lookup. Subscription IDs are discovered from server-side
+// payment records, never accepted from the browser as proof of ownership.
+app.get("/api/customer/billing", rateLimit("customer-billing", 30, 10 * 60 * 1000), async (req, res) => {
+  try {
+    const customer = customerFromRequest(req);
+    if (!customer) return res.status(401).json({ error: "Please sign in again." });
+    const records = Object.values(readPayments()).filter(r => r && r.type === "subscription" && String(r.customerEmail || "").toLowerCase() === customer.email);
+    const subscriptions = [];
+    for (const record of records) {
+      const subscriptionId = String(record.subscriptionId || "");
+      if (!ID_RE.test(subscriptionId)) continue;
+      try {
+        const sub = await razorpay.fetchSubscription(subscriptionId);
+        const notes = sub.notes || {};
+        if (notes.brand !== "QEVNIX" || String(notes.customer_email || "").toLowerCase() !== customer.email) continue;
+        const invoiceResult = await razorpay.fetchSubscriptionInvoices(subscriptionId);
+        const invoices = (invoiceResult.items || []).map(inv => ({
+          id: inv.id,
+          invoiceNumber: inv.invoice_number || inv.id,
+          status: inv.status || "unknown",
+          amount: Number(inv.amount || 0) / 100,
+          currency: inv.currency || "INR",
+          issuedAt: inv.issued_at || inv.date || null,
+          paidAt: inv.paid_at || null,
+          paymentId: inv.payment_id || null
+        })).sort((a, b) => Number(b.issuedAt || 0) - Number(a.issuedAt || 0));
+        const plan = products[notes.plan_code] || {};
+        subscriptions.push({
+          subscriptionId: sub.id,
+          planCode: notes.plan_code || record.planCode || "",
+          planName: plan.label || record.item || "QEVNIX Subscription",
+          amount: Number(record.amount || plan.amount || 0),
+          currency: "INR",
+          status: sub.status || record.status || "unknown",
+          nextChargeAt: sub.charge_at || null,
+          currentStart: sub.current_start || null,
+          currentEnd: sub.current_end || null,
+          startAt: sub.start_at || null,
+          paidCount: Number(sub.paid_count || 0),
+          totalCount: Number(sub.total_count || 0),
+          remainingCount: Number(sub.remaining_count || 0),
+          invoices
+        });
+      } catch (err) {
+        console.error("Customer billing lookup for subscription", subscriptionId, err.message);
+      }
+    }
+    res.json({ customer: { name: customer.name, email: customer.email }, subscriptions, fetchedAt: new Date().toISOString() });
+  } catch (e) {
+    console.error("Customer billing lookup:", e.message);
+    res.status(500).json({ error: "Could not load billing details. Please try again later." });
+  }
+});
+
+// Authenticated unified payment history: one-time orders + subscription invoices.
+// Ownership is derived only from the signed-in customer's server-side records and Razorpay notes.
+app.get("/api/customer/payments", rateLimit("customer-payments", 30, 10 * 60 * 1000), async (req, res) => {
+  try {
+    const customer = customerFromRequest(req);
+    if (!customer) return res.status(401).json({ error: "Please sign in again." });
+    const email = String(customer.email || "").toLowerCase();
+    const records = Object.values(readPayments()).filter(r => r && String(r.customerEmail || "").toLowerCase() === email);
+    const payments = [];
+    for (const record of records) {
+      if (record.type === "order" && record.orderId) {
+        try {
+          const order = await razorpay.fetchOrder(record.orderId);
+          if (!order.notes || order.notes.brand !== "QEVNIX" || String(order.notes.customer_email || "").toLowerCase() !== email) continue;
+          let payment = null;
+          if (record.paymentId) payment = await razorpay.fetchPayment(record.paymentId);
+          else {
+            const found = await razorpay.fetchOrderPayments(record.orderId);
+            payment = (found.items || []).filter(x => x.order_id === record.orderId).sort((a,b) => Number(b.created_at || 0)-Number(a.created_at || 0))[0] || null;
+          }
+          const isPaid = Boolean(payment && payment.status === "captured") || order.status === "paid";
+          payments.push({
+            id: payment && payment.id || record.paymentId || record.orderId,
+            orderId: record.orderId,
+            type: "one_time",
+            description: record.item || "QEVNIX website service",
+            amount: Number(payment && payment.amount != null ? payment.amount : (record.amountPaid != null ? record.amountPaid * 100 : record.amount * 100)) / 100,
+            currency: payment && payment.currency || record.currency || "INR",
+            status: isPaid ? "paid" : (payment && payment.status || order.status || record.status || "pending"),
+            method: payment && payment.method || record.method || null,
+            paidAt: payment && payment.created_at || record.paidAt || null
+          });
+        } catch (err) { console.error("One-time payment history lookup:", record.orderId, err.message); }
+      }
+      if (record.type === "subscription" && record.subscriptionId && ID_RE.test(String(record.subscriptionId))) {
+        try {
+          const sub = await razorpay.fetchSubscription(record.subscriptionId);
+          if (!sub.notes || sub.notes.brand !== "QEVNIX" || String(sub.notes.customer_email || "").toLowerCase() !== email) continue;
+          const invResult = await razorpay.fetchSubscriptionInvoices(record.subscriptionId);
+          for (const inv of (invResult.items || [])) {
+            payments.push({ id: inv.payment_id || inv.id, invoiceId: inv.id, type: "subscription", description: record.item || "QEVNIX subscription", amount: Number(inv.amount || 0) / 100, currency: inv.currency || "INR", status: inv.status || "unknown", method: null, paidAt: inv.paid_at || inv.issued_at || inv.date || null });
+          }
+        } catch (err) { console.error("Subscription payment history lookup:", record.subscriptionId, err.message); }
+      }
+    }
+    payments.sort((a,b) => Number(b.paidAt || 0) - Number(a.paidAt || 0));
+    res.json({ customer: { name: customer.name, email: customer.email }, payments, fetchedAt: new Date().toISOString() });
+  } catch (e) {
+    console.error("Customer payment history:", e.message);
+    res.status(500).json({ error: "Could not load payment history. Please try again later." });
+  }
+});
+
 app.get("/api/customer/projects", (req, res) => {
   try {
     const customer = customerFromRequest(req);
@@ -251,6 +409,23 @@ app.get("/api/customer/projects", (req, res) => {
     const projects = data.projects.filter(p => p.customerEmail === customer.email).map(({ id, title, description, status, paymentStatus, totalAmount, paidAmount, updatedAt }) => ({ id, title, description, status, paymentStatus, totalAmount, paidAmount, balanceAmount: Math.max(0, Number(totalAmount || 0) - Number(paidAmount || 0)), updatedAt }));
     res.json({ customer: { name: customer.name, email: customer.email }, projects });
   } catch (e) { res.status(500).json({ error: "Could not load projects." }); }
+});
+app.post("/api/customer/set-password", rateLimit("set-password", 10, 15 * 60 * 1000), (req, res) => {
+  try {
+    const token = String(req.body.token || ""), password = String(req.body.password || "");
+    if (!/^[a-f0-9]{48}$/.test(token)) return res.status(400).json({ error: "This link is not valid. Please message QEVNIX on WhatsApp." });
+    if (password.length < 8 || password.length > 100) return res.status(400).json({ error: "Password must be at least 8 characters." });
+    const data = readProjectData(); const h = sha256(token);
+    const customer = data.customers.find(c => c.setup && c.setup.tokenHash === h && c.setup.expires > Date.now() && !c.passwordHash);
+    if (!customer) return res.status(400).json({ error: "This link has expired or was already used. Please message QEVNIX on WhatsApp and we will reset your access." });
+    customer.salt = crypto.randomBytes(16).toString("hex");
+    customer.passwordHash = hashPassword(password, customer.salt);
+    delete customer.setup;
+    writeProjectData(data);
+    const session = crypto.randomBytes(32).toString("hex");
+    projectSessions.set(session, { email: customer.email, expires: Date.now() + SESSION_TTL_MS });
+    res.json({ token: session, customer: { name: customer.name, email: customer.email } });
+  } catch (e) { console.error("Set password:", e.message); res.status(500).json({ error: "Could not save your password." }); }
 });
 app.post("/api/customer/logout", (req, res) => {
   const auth = String(req.headers.authorization || "");
@@ -315,21 +490,23 @@ app.post("/api/payments/create-order", rateLimit("create-order", 20, 10 * 60 * 1
     const item = products[req.body.planCode];
     if (!item || item.type !== "one_time") return res.status(400).json({ error: "Invalid website package." });
     const paymentOption = req.body.paymentOption === "advance" ? "advance" : "full";
-    const payableAmount = paymentOption === "advance" ? Math.round(item.amount * 50) / 100 : item.amount;
-    const remainingAmount = Math.round((item.amount - payableAmount) * 100) / 100;
+    const gstAmount = money2(item.amount * GST_RATE / 100);
+    const totalWithGst = money2(item.amount + gstAmount);
+    const payableAmount = paymentOption === "advance" ? money2(totalWithGst * 50 / 100) : totalWithGst;
+    const remainingAmount = money2(totalWithGst - payableAmount);
     const c = cleanCustomer(req.body);
     if (!c.ok) return res.status(400).json({ error: "Please enter a valid 10-digit phone number and email address." });
     const order = await razorpay.createOrder({
       amount: Math.round(payableAmount * 100), // paise
       currency: "INR",
       receipt: `qx_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`,
-      notes: { brand: "QEVNIX", plan_code: req.body.planCode, payment_option: paymentOption, total_amount: String(item.amount), customer_name: c.name, customer_email: c.email, customer_phone: c.phone }
+      notes: { brand: "QEVNIX", plan_code: req.body.planCode, payment_option: paymentOption, base_amount: String(item.amount), gst_rate: String(GST_RATE), gst_amount: String(gstAmount), total_amount: String(totalWithGst), customer_name: c.name, customer_email: c.email, customer_phone: c.phone }
     });
-    upsertPayment(order.id, { type: "order", orderId: order.id, planCode: req.body.planCode, item: item.label, paymentOption, amount: payableAmount, totalAmount: item.amount, remainingAmount, customerName: c.name, customerEmail: c.email, customerPhone: c.phone, status: "created", mode: paymentMode });
+    upsertPayment(order.id, { type: "order", orderId: order.id, planCode: req.body.planCode, item: item.label, paymentOption, baseAmount: item.amount, gstRate: GST_RATE, gstAmount, amount: payableAmount, totalAmount: totalWithGst, remainingAmount, customerName: c.name, customerEmail: c.email, customerPhone: c.phone, status: "created", mode: paymentMode });
     res.json({
       orderId: order.id, amount: order.amount, currency: order.currency, keyId: process.env.RAZORPAY_KEY_ID,
-      item: item.label, description: `${item.label} - ${paymentOption === "advance" ? "50% advance" : "full payment"}`,
-      paymentOption, totalAmount: item.amount, remainingAmount, mode: paymentMode,
+      item: item.label, description: `${item.label} - ${paymentOption === "advance" ? "50% advance" : "full payment"} (including GST)` ,
+      paymentOption, baseAmount: item.amount, gstRate: GST_RATE, gstAmount, totalAmount: totalWithGst, remainingAmount, mode: paymentMode,
       prefill: { name: c.name, email: c.email, contact: c.phone }
     });
   } catch (e) {
@@ -349,8 +526,9 @@ app.post("/api/payments/verify", rateLimit("verify", 40, 10 * 60 * 1000), async 
     const [order, payment] = await Promise.all([razorpay.fetchOrder(orderId), razorpay.fetchPayment(paymentId)]);
     if (!order.notes || order.notes.brand !== "QEVNIX" || payment.order_id !== order.id) return res.status(400).json({ verified: false, error: "Payment does not match this order." });
     const paid = payment.status === "captured";
-    upsertPayment(order.id, { status: paid ? "paid" : payment.status, paymentId, method: payment.method });
-    res.json({ verified: true, paid, paymentStatus: payment.status, orderId: order.id, paymentId, amount: payment.amount / 100 });
+    upsertPayment(order.id, { status: paid ? "paid" : payment.status, paymentId, method: payment.method, amountPaid: payment.amount / 100, currency: payment.currency || "INR", paidAt: payment.created_at || null });
+    const portal = paid ? provisionPortalFromPayment(order.id, { issueSetupToken: true }) : null;
+    res.json({ verified: true, paid, paymentStatus: payment.status, orderId: order.id, paymentId, amount: payment.amount / 100, portal: portalInfo(portal) });
   } catch (e) {
     console.error("Razorpay verify:", e.message);
     res.status(e.status || 500).json({ verified: false, error: e.message || "Could not verify payment." });
@@ -405,7 +583,8 @@ app.post("/api/subscriptions/verify", rateLimit("sub-verify", 40, 10 * 60 * 1000
       return res.status(400).json({ verified: false, error: "Signature could not be verified. Please contact QEVNIX." });
     }
     upsertPayment(sub.id, { status: sub.status, authPaymentId: paymentId });
-    res.json({ verified: true, subscriptionId: sub.id, status: sub.status });
+    const portal = ["authenticated", "active"].includes(sub.status) ? provisionPortalFromPayment(sub.id, { issueSetupToken: true }) : null;
+    res.json({ verified: true, subscriptionId: sub.id, status: sub.status, portal: portalInfo(portal) });
   } catch (e) {
     console.error("Razorpay verify subscription:", e.message);
     res.status(e.status || 500).json({ verified: false, error: e.message || "Could not verify subscription." });
@@ -424,12 +603,44 @@ app.get("/api/subscriptions/:subscriptionId", rateLimit("sub-status", 60, 10 * 6
   }
 });
 
-// Cancellation is a REQUEST only. QEVNIX applies its notice policy and then cancels in the Razorpay dashboard.
+// Cancellation requests are stored for admin review. This does NOT cancel a Razorpay subscription automatically.
+const CANCELLATIONS_FILE = process.env.CANCELLATIONS_FILE || path.join(DATA_DIR, "cancellation-requests.json");
+function readCancellationRequests() {
+  try { const rows = JSON.parse(fs.readFileSync(CANCELLATIONS_FILE, "utf8")); return Array.isArray(rows) ? rows : []; }
+  catch (e) { if (e.code === "ENOENT") return []; throw e; }
+}
+function writeCancellationRequests(rows) {
+  fs.mkdirSync(path.dirname(CANCELLATIONS_FILE), { recursive: true });
+  const tmp = CANCELLATIONS_FILE + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(rows, null, 2), { mode: 0o600 });
+  fs.renameSync(tmp, CANCELLATIONS_FILE);
+}
 app.post("/api/subscriptions/cancellation-request", rateLimit("cancel-req", 10, 60 * 60 * 1000), (req, res) => {
-  const { subscriptionId, customerEmail } = req.body || {};
-  if (!subscriptionId || !customerEmail) return res.status(400).json({ error: "Subscription ID and customer email are required." });
-  console.log("Cancellation request received for", String(subscriptionId).slice(0, 60));
-  res.status(202).json({ received: true, subscriptionId, message: "Cancellation request received for review. This starter does not yet store requests or cancel automatically." });
+  try {
+    const signedInCustomer = customerFromRequest(req);
+    if (!signedInCustomer) return res.status(401).json({ error: "Please sign in to request cancellation." });
+    const name = String(signedInCustomer.name || req.body.name || "").trim().slice(0, 80);
+    const customerEmail = signedInCustomer.email;
+    const subscriptionId = String(req.body.subscriptionId || "").trim().slice(0, 60);
+    const reason = String(req.body.reason || "").trim().slice(0, 1000);
+    if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail) || !ID_RE.test(subscriptionId)) {
+      return res.status(400).json({ error: "Please enter your name, a valid registered email and a valid subscription ID." });
+    }
+    const ownedSubscription = Object.values(readPayments()).some(r => r && r.type === "subscription" && r.subscriptionId === subscriptionId && String(r.customerEmail || "").toLowerCase() === customerEmail);
+    if (!ownedSubscription) return res.status(404).json({ error: "This subscription is not linked to your signed-in account." });
+    const rows = readCancellationRequests();
+    const duplicate = rows.find(r => r.subscriptionId === subscriptionId && r.customerEmail === customerEmail && r.status === "pending");
+    if (duplicate) return res.status(200).json({ received: true, requestId: duplicate.id, message: "A pending cancellation request already exists for this subscription." });
+    if (rows.length >= 10000) return res.status(429).json({ error: "Cancellation requests are temporarily unavailable. Please contact QEVNIX." });
+    const request = { id: crypto.randomUUID(), name, customerEmail, subscriptionId, reason, status: "pending", noticePeriodDays: 30, createdAt: new Date().toISOString() };
+    rows.push(request); writeCancellationRequests(rows);
+    res.status(201).json({ received: true, requestId: request.id, message: "Your cancellation request has been saved for QEVNIX review. This does not cancel the subscription automatically." });
+  } catch (e) { console.error("Cancellation request:", e.message); res.status(500).json({ error: "Could not save your request. Please contact QEVNIX." }); }
+});
+app.get("/api/admin/cancellation-requests", (req, res) => {
+  if (!projectAdminAuthorized(req)) return res.status(401).json({ error: "Admin access denied." });
+  try { res.json({ requests: readCancellationRequests().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))) }); }
+  catch (e) { res.status(500).json({ error: "Could not load cancellation requests." }); }
 });
 
 // Admin: list recorded payments/subscriptions (send your ADMIN_PROJECT_TOKEN in the x-admin-token header).
@@ -457,10 +668,14 @@ app.post("/api/razorpay/webhook", (req, res) => {
     const pay = pl.payment && pl.payment.entity; const sub = pl.subscription && pl.subscription.entity;
     if (pay && /^payment\./.test(evt.event)) {
       const status = evt.event === "payment.captured" ? "paid" : (evt.event === "payment.failed" ? "failed" : pay.status);
-      if (pay.order_id) upsertPayment(pay.order_id, { type: "order", orderId: pay.order_id, status, paymentId: pay.id, method: pay.method, amountPaid: pay.amount / 100, customerEmail: pay.email, lastWebhookEvent: evt.event });
+      if (pay.order_id) upsertPayment(pay.order_id, { type: "order", orderId: pay.order_id, status, paymentId: pay.id, method: pay.method, amountPaid: pay.amount / 100, currency: pay.currency || "INR", paidAt: pay.created_at || null, lastWebhookEvent: evt.event });
       else if (pay.invoice_id || sub) upsertPayment(`pay:${pay.id}`, { type: "subscription_charge", paymentId: pay.id, status, amountPaid: pay.amount / 100, customerEmail: pay.email, lastWebhookEvent: evt.event });
     }
     if (pl.order && pl.order.entity && evt.event === "order.paid") upsertPayment(pl.order.entity.id, { status: "paid", lastWebhookEvent: evt.event });
+    // Create the customer's portal account + project even if the browser was closed (no setup token here; admin can reset access).
+    if (evt.event === "payment.captured" && pay && pay.order_id) provisionPortalFromPayment(pay.order_id);
+    if (evt.event === "order.paid" && pl.order && pl.order.entity) provisionPortalFromPayment(pl.order.entity.id);
+    if (sub && ["subscription.activated", "subscription.charged"].includes(evt.event)) provisionPortalFromPayment(sub.id);
     if (sub && /^subscription\./.test(evt.event)) {
       upsertPayment(sub.id, { type: "subscription", subscriptionId: sub.id, status: sub.status, paidCount: sub.paid_count, planCode: sub.notes && sub.notes.plan_code, lastEvent: evt.event });
     }
