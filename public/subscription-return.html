@@ -1,0 +1,32 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><script src="config.js"></script><meta name="robots" content="noindex,nofollow"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Subscription status | QEVNIX</title><link rel="stylesheet" href="styles.css"></head>
+<body><main class="section"><div class="wrap" style="max-width:640px">
+<h1 id="title">Checking your subscription…</h1>
+<p class="lead" id="status">Please wait while we check the subscription status.</p>
+<div id="portalSetup"></div>
+<p style="margin-top:28px"><a class="btn btn-primary" href="index.html">Back to QEVNIX</a></p>
+</div></main>
+<script>
+(async()=>{
+ const id=new URLSearchParams(location.search).get("subscription_id");
+ const title=document.getElementById("title"), el=document.getElementById("status");
+ if(!id){title.textContent="Subscription not found";el.textContent="Subscription reference missing. Please contact QEVNIX on WhatsApp.";return;}
+ const msg={
+  active:["Subscription active","Thank you for choosing QEVNIX! Your monthly plan is active."],
+  authenticated:["Payment method authorised","Your payment method is authorised. Monthly billing will start as scheduled."],
+  created:["Not completed","The subscription was not completed. You have not been charged."],
+  pending:["Payment pending","Your latest monthly payment is pending."],
+  halted:["Billing paused","Monthly billing is paused because a payment failed. Please contact QEVNIX."],
+  cancelled:["Subscription cancelled","This subscription has been cancelled."],
+  completed:["Subscription completed","This subscription has completed."]
+ };
+ try{
+  const r=await fetch("/api/subscriptions/"+encodeURIComponent(id));
+  const d=await r.json();
+  if(!r.ok) throw new Error(d.error||"Could not fetch subscription status.");
+  const m=msg[d.status]||["Subscription status: "+d.status,"Please contact QEVNIX if you need help."];
+  title.textContent=m[0];el.textContent=m[1];if(['active','authenticated'].includes(d.status))window.qxPortalReady=true;
+ }catch(e){title.textContent="Something went wrong";el.textContent=e.message;}
+ if(window.qxPortalReady&&window.qxPortal)window.qxPortal.show();
+})();
+</script><script src="portal-setup.js"></script></body></html>
