@@ -56,9 +56,11 @@ function createClient({ keyId, keySecret, fetchImpl }) {
     createOrder: body => request("POST", "/orders", body),
     fetchOrder: id => request("GET", `/orders/${encodeURIComponent(id)}`),
     fetchPayment: id => request("GET", `/payments/${encodeURIComponent(id)}`),
+    fetchOrderPayments: id => request("GET", `/orders/${encodeURIComponent(id)}/payments`),
     createPlan: body => request("POST", "/plans", body),
     createSubscription: body => request("POST", "/subscriptions", body),
-    fetchSubscription: id => request("GET", `/subscriptions/${encodeURIComponent(id)}`)
+    fetchSubscription: id => request("GET", `/subscriptions/${encodeURIComponent(id)}`),
+    fetchSubscriptionInvoices: id => request("GET", `/invoices?subscription_id=${encodeURIComponent(id)}&count=100`)
   };
 }
 
